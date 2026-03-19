@@ -62,7 +62,7 @@ function serveStatic(res, filePath) {
 }
 
 function buildArgs(outputPath, format, quality) {
-  const args = ['--newline', '--no-playlist', '--extractor-args', 'youtube:player_client=android_vr'];
+  const args = ['--newline', '--no-playlist', '--extractor-args', 'youtube:player_client=tv_embedded,web'];
 
   // Use cookies.txt if present
   if (fs.existsSync(COOKIE_FILE)) {
