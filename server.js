@@ -62,7 +62,8 @@ function serveStatic(res, filePath) {
 }
 
 function buildArgs(outputPath, format, quality) {
-  const args = ['--newline', '--no-playlist', '--extractor-args', 'youtube:player_client=tv_embedded,web'];
+  const denoPath = '/opt/render/project/deno/bin/deno';
+  const args = ['--newline', '--no-playlist', '--extractor-args', 'youtube:player_client=web', '--js-runtimes', `deno:${denoPath}`];
 
   // Use cookies.txt if present
   if (fs.existsSync(COOKIE_FILE)) {
