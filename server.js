@@ -8,8 +8,17 @@ const http      = require('http');
 const { spawn, execSync } = require('child_process');
 const fs        = require('fs');
 const path      = require('path');
-const os        = require('os');
 const { URL }   = require('url');
+const os        = require('os');
+
+// Use cookies.txt from project folder if it exists
+const COOKIE_FILE = path.join(__dirname, 'cookies.txt');
+if (fs.existsSync(COOKIE_FILE)) {
+  console.log('✓ cookies.txt found — YouTube bot detection bypassed');
+} else {
+  console.warn('⚠ No cookies.txt found — some videos may fail');
+}
+
 
 const PORT = process.env.PORT || 3131;
 
@@ -54,6 +63,11 @@ function serveStatic(res, filePath) {
 
 function buildArgs(outputPath, format, quality) {
   const args = ['--newline', '--no-playlist', '--extractor-args', 'youtube:player_client=android_vr'];
+
+  // Use cookies.txt if present
+  if (fs.existsSync(COOKIE_FILE)) {
+    args.push('--cookies', COOKIE_FILE);
+  }
 
   if (format === 'mp3') {
     args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
