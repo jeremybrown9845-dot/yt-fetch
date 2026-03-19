@@ -16,7 +16,7 @@
       --accent: #ff3c3c;
       --accent2: #ff8c00;
       --text: #f0ece4;
-      --muted: #4a4a4a;
+      --muted: #3a3a3a;
       --muted2: #777;
       --success: #2ecc71;
       --error: #ff3c3c;
@@ -187,10 +187,11 @@
       transition: opacity 0.2s, transform 0.1s;
     }
 
-    .btn-download:hover { opacity: 0.88; }
-    .btn-download:active { transform: scale(0.99); }
+    .btn-download:hover   { opacity: 0.88; }
+    .btn-download:active  { transform: scale(0.99); }
     .btn-download:disabled { opacity: 0.35; cursor: not-allowed; }
 
+    /* Status */
     .status {
       margin-top: 1.1rem;
       font-size: 0.68rem;
@@ -216,30 +217,70 @@
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
-      50% { opacity: 0.15; }
+      50%       { opacity: 0.15; }
     }
 
-    hr {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 1.5rem 0;
+    /* Progress bar */
+    .progress-wrap {
+      margin-top: 1.2rem;
+      display: none;
     }
 
-    .note {
-      font-size: 0.63rem;
+    .progress-wrap.visible { display: block; }
+
+    .progress-bar-bg {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      height: 6px;
+      overflow: hidden;
+      margin-bottom: 0.6rem;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+
+    .progress-bar-fill.indeterminate {
+      width: 40% !important;
+      animation: slide 1.2s ease-in-out infinite;
+    }
+
+    @keyframes slide {
+      0%   { transform: translateX(-120%); }
+      100% { transform: translateX(280%); }
+    }
+
+    .progress-label {
+      font-size: 0.62rem;
       color: var(--muted2);
-      line-height: 2;
+      letter-spacing: 1px;
     }
 
-    .note strong { color: var(--text); }
-    .note code {
+    /* Log box */
+    .log-box {
+      margin-top: 1.2rem;
       background: #000;
       border: 1px solid var(--border);
       border-radius: 2px;
-      padding: 0.1em 0.4em;
-      color: var(--accent2);
-      font-size: 0.9em;
+      padding: 0.8rem 1rem;
+      font-size: 0.62rem;
+      color: #666;
+      max-height: 120px;
+      overflow-y: auto;
+      line-height: 1.8;
+      display: none;
+      word-break: break-all;
     }
+
+    .log-box.visible { display: block; }
+    .log-box .line-ok  { color: #aaa; }
+    .log-box .line-err { color: var(--error); }
+    .log-box .line-pct { color: var(--accent2); }
 
     footer {
       margin-top: 1.8rem;
@@ -294,16 +335,20 @@
       </div>
 
       <button class="btn-download" id="downloadBtn">DOWNLOAD</button>
+
       <div class="status" id="status"></div>
 
-      <hr/>
-
-      <div class="note">
-        <strong>How it works:</strong> this page talks to the <code>server.js</code> backend which runs <code>yt-dlp</code> on the server. Files are saved in <code>/tmp/</code> on the server — check your Render logs for progress.
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-label" id="progressLabel">Starting…</div>
       </div>
+
+      <div class="log-box" id="logBox"></div>
     </div>
 
-    <footer>YT Fetch &mdash; self-hosted &mdash; no data stored</footer>
+    <footer>YT Fetch &mdash; file downloads straight to your device</footer>
   </div>
 
   <script src="downloader.js"></script>

@@ -1,13 +1,15 @@
 /**
- * server.js — YT Fetch backend
- * Hosts the frontend AND handles yt-dlp downloads.
- * Deploy to Render — it auto-sets process.env.PORT
+ * server.js — YT Fetch
+ * - Streams yt-dlp progress back to browser via SSE
+ * - Serves the finished file as a browser download automatically
  */
 
 const http      = require('http');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const fs        = require('fs');
 const path      = require('path');
+const os        = require('os');
+const { URL }   = require('url');
 
 const PORT = process.env.PORT || 3131;
 
@@ -50,8 +52,9 @@ function serveStatic(res, filePath) {
   });
 }
 
-function buildArgs(url, format, quality) {
-  const args = [];
+function buildArgs(outputPath, format, quality) {
+  const args = ['--newline', '--no-playlist'];
+
   if (format === 'mp3') {
     args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
   } else if (format === 'mp4') {
@@ -70,8 +73,16 @@ function buildArgs(url, format, quality) {
     const q = quality ? `[height<=${quality}]` : '';
     args.push('-f', q ? `bestvideo${q}+bestaudio/best` : 'bestvideo+bestaudio/best');
   }
-  args.push('--progress', '-o', '/tmp/%(title)s.%(ext)s', url);
+
+  args.push('-o', outputPath);
   return args;
+}
+
+// Active jobs: jobId -> { done, error, file, progress }
+const jobs = new Map();
+
+function makeJobId() {
+  return Math.random().toString(36).slice(2, 10);
 }
 
 const server = http.createServer((req, res) => {
@@ -79,28 +90,137 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-  if (req.method === 'GET' && req.url === '/ping') {
+  const reqUrl = new URL(req.url, `http://localhost`);
+
+  // ── Health check ───────────────────────────────────────────────────────────
+  if (req.method === 'GET' && reqUrl.pathname === '/ping') {
     json(res, 200, { ok: true });
     return;
   }
 
-  if (req.method === 'POST' && req.url === '/download') {
+  // ── Start download job ─────────────────────────────────────────────────────
+  if (req.method === 'POST' && reqUrl.pathname === '/download') {
     readBody(req)
       .then(({ url, format = 'bestvideo+bestaudio/best', quality = '' }) => {
         if (!url) { json(res, 400, { error: 'Missing URL' }); return; }
-        const args = buildArgs(url, format, quality);
-        console.log('▶ yt-dlp', args.join(' '));
-        const proc = spawn('yt-dlp', args, { stdio: 'inherit' });
-        proc.on('error', e => console.error('Error:', e.message));
-        proc.on('close', code => console.log(`Done (exit ${code})`));
-        json(res, 200, { ok: true, message: 'Download started in server terminal.' });
+
+        const jobId    = makeJobId();
+        const tmpDir   = os.tmpdir();
+        const outPath  = path.join(tmpDir, `ytfetch_${jobId}_%(title)s.%(ext)s`);
+
+        const job = { done: false, error: null, filePath: null, lines: [] };
+        jobs.set(jobId, job);
+
+        const args = buildArgs(outPath, format, quality);
+        args.push(url);
+
+        console.log(`[${jobId}] yt-dlp`, args.join(' '));
+
+        const proc = spawn('yt-dlp', args);
+
+        proc.stdout.on('data', chunk => {
+          const lines = chunk.toString().split('\n').filter(Boolean);
+          lines.forEach(line => {
+            console.log(`[${jobId}]`, line);
+            job.lines.push(line);
+          });
+        });
+
+        proc.stderr.on('data', chunk => {
+          const lines = chunk.toString().split('\n').filter(Boolean);
+          lines.forEach(line => {
+            console.error(`[${jobId}] ERR:`, line);
+            job.lines.push('ERR: ' + line);
+          });
+        });
+
+        proc.on('close', code => {
+          if (code === 0) {
+            // Find the output file (yt-dlp resolves the template)
+            try {
+              const files = fs.readdirSync(tmpDir)
+                .filter(f => f.startsWith(`ytfetch_${jobId}_`))
+                .map(f => path.join(tmpDir, f));
+              job.filePath = files[0] || null;
+            } catch {}
+            job.done  = true;
+            console.log(`[${jobId}] ✓ Done:`, job.filePath);
+          } else {
+            job.done  = true;
+            job.error = `yt-dlp exited with code ${code}`;
+            console.error(`[${jobId}] ✗ Failed`);
+          }
+        });
+
+        proc.on('error', err => {
+          job.done  = true;
+          job.error = err.message;
+        });
+
+        json(res, 200, { ok: true, jobId });
       })
       .catch(err => json(res, 400, { error: err.message }));
     return;
   }
 
-  // Serve static files
-  const filePath = path.join(__dirname, req.url === '/' ? 'index.html' : req.url);
+  // ── Poll job status ────────────────────────────────────────────────────────
+  if (req.method === 'GET' && reqUrl.pathname === '/status') {
+    const jobId = reqUrl.searchParams.get('jobId');
+    const job   = jobs.get(jobId);
+    if (!job) { json(res, 404, { error: 'Job not found' }); return; }
+
+    const lastN  = parseInt(reqUrl.searchParams.get('from') || '0', 10);
+    const newLines = job.lines.slice(lastN);
+
+    json(res, 200, {
+      done:     job.done,
+      error:    job.error,
+      hasFile:  !!job.filePath,
+      lines:    newLines,
+      total:    job.lines.length,
+    });
+    return;
+  }
+
+  // ── Serve finished file to browser ─────────────────────────────────────────
+  if (req.method === 'GET' && reqUrl.pathname === '/file') {
+    const jobId = reqUrl.searchParams.get('jobId');
+    const job   = jobs.get(jobId);
+
+    if (!job || !job.done) { json(res, 400, { error: 'Not ready' }); return; }
+    if (job.error)         { json(res, 500, { error: job.error });    return; }
+    if (!job.filePath)     { json(res, 404, { error: 'File not found' }); return; }
+
+    const fileName = path.basename(job.filePath);
+    const stat     = fs.statSync(job.filePath);
+    const ext      = path.extname(fileName).toLowerCase();
+
+    const mimeMap = {
+      '.mp4': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska',
+      '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.ogg': 'audio/ogg',
+      '.wav': 'audio/wav',
+    };
+    const fileMime = mimeMap[ext] || 'application/octet-stream';
+
+    res.writeHead(200, {
+      'Content-Type':        fileMime,
+      'Content-Length':      stat.size,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
+    });
+
+    const stream = fs.createReadStream(job.filePath);
+    stream.pipe(res);
+
+    stream.on('close', () => {
+      // Clean up tmp file after serving
+      try { fs.unlinkSync(job.filePath); } catch {}
+      jobs.delete(jobId);
+    });
+    return;
+  }
+
+  // ── Serve static files ─────────────────────────────────────────────────────
+  const filePath = path.join(__dirname, reqUrl.pathname === '/' ? 'index.html' : reqUrl.pathname);
   serveStatic(res, filePath);
 });
 
