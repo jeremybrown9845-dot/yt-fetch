@@ -53,7 +53,7 @@ function serveStatic(res, filePath) {
 }
 
 function buildArgs(outputPath, format, quality) {
-  const args = ['--newline', '--no-playlist'];
+  const args = ['--newline', '--no-playlist', '--extractor-args', 'youtube:player_client=android_vr'];
 
   if (format === 'mp3') {
     args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
