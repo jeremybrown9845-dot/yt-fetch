@@ -1,20 +1,7 @@
 services:
   - type: web
-    name: fetch-backend
+    name: fetch-app
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: python server.py
     healthCheckPath: /health
-    envVars:
-      - key: ALLOWED_ORIGIN
-        value: https://fetch-frontend.onrender.com
-
-  - type: web
-    name: fetch-frontend
-    runtime: static
-    staticPublishPath: .
-    buildCommand: echo "no build needed"
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html

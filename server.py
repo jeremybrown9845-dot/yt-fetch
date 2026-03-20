@@ -162,8 +162,24 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/health":
             self.handle_health()
+        elif path in ("/", "/index.html"):
+            self.serve_file("index.html", "text/html")
         else:
             self.json_response(404, {"error": "not found"})
+
+    def serve_file(self, filename, mime):
+        base = os.path.dirname(os.path.abspath(__file__))
+        filepath = os.path.join(base, filename)
+        if not os.path.exists(filepath):
+            self.json_response(404, {"error": f"{filename} not found"})
+            return
+        with open(filepath, "rb") as f:
+            data = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_POST(self):
         path = urlparse(self.path).path
