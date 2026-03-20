@@ -1,23 +1,19 @@
 services:
-  # ── Backend (Python Web Service) ────────────────────────────────────────
   - type: web
     name: fetch-backend
     runtime: python
-    buildCommand: |
-      pip install -r requirements.txt
-      apt-get install -y ffmpeg || true
+    buildCommand: pip install -r requirements.txt
     startCommand: python server.py
     healthCheckPath: /health
     envVars:
       - key: ALLOWED_ORIGIN
-        value: https://fetch-frontend.onrender.com   # ← update after frontend is created
+        value: https://fetch-frontend.onrender.com
 
-  # ── Frontend (Static Site) ───────────────────────────────────────────────
   - type: web
     name: fetch-frontend
     runtime: static
     staticPublishPath: .
-    buildCommand: echo "No build step needed"
+    buildCommand: echo "no build needed"
     routes:
       - type: rewrite
         source: /*

@@ -183,6 +183,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # Make imageio's bundled ffmpeg available on PATH (works on Render without root)
+    try:
+        import imageio_ffmpeg
+        ffmpeg_dir = os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
+        os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
+        print(f"✅  ffmpeg via imageio: {imageio_ffmpeg.get_ffmpeg_exe()}")
+    except Exception as e:
+        print(f"⚠️  imageio-ffmpeg not available: {e} — continuing without it")
+
     check = subprocess.run(["yt-dlp", "--version"], capture_output=True, text=True)
     if check.returncode != 0:
         print("❌  yt-dlp not found — install it: pip install yt-dlp")
