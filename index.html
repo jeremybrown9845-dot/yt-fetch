@@ -927,7 +927,7 @@
       $('progressBar').className = 'progress-bar indeterminate';
       $('fetchBtn').disabled = true;
       setStatus('loading', 'Connecting…', 'Reaching local server');
-      log('Sending request to local server…');
+      log('Sending request… (may take 20-30s on first load)');
 
       try {
         // Try local backend (python server.py)
@@ -935,7 +935,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url }),
-          signal: AbortSignal.timeout(8000)
+          signal: AbortSignal.timeout(60000)
         });
 
         if (!resp.ok) throw new Error('Server error ' + resp.status);
