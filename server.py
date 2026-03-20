@@ -88,7 +88,7 @@ class Handler(BaseHTTPRequestHandler):
 
         result = subprocess.run(
             ["yt-dlp", "--dump-json", "--no-playlist", "--no-warnings", url],
-            capture_output=True, text=True, timeout=30
+            capture_output=True, text=True, timeout=60
         )
         if result.returncode != 0:
             err = (result.stderr.strip().splitlines() or ["unknown error"])[-1]
@@ -157,6 +157,17 @@ class Handler(BaseHTTPRequestHandler):
                         self.wfile.write(chunk)
                     except BrokenPipeError:
                         break
+
+    def do_HEAD(self):
+        # Render uses HEAD for health/boot checks
+        path = urlparse(self.path).path
+        if path in ("/", "/index.html", "/health"):
+            self.send_response(200)
+            self.send_cors()
+            self.end_headers()
+        else:
+            self.send_response(404)
+            self.end_headers()
 
     def do_GET(self):
         path = urlparse(self.path).path
